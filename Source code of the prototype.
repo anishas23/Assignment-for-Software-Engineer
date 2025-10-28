@@ -1,1 +1,262 @@
+1. Source Code of the Prototype
 
+Below is the organized source code for the assignment planner prototype. Each file is self-contained and well-commented.
+
+File Structure:
+
+project/
+├── ingestor.py      # Task ingestion (PDF/OCR or manual)
+├── planner.py       # Planning logic using LLM
+├── executor.py      # Execution module (reminders, calendar integration)
+├── backend.py       # FastAPI backend with API endpoints
+└── ui.py            # Streamlit-based user interface
+
+
+ingestor.py (Task Ingestion):
+
+# ingestor.py
+"""
+Module: Task Ingestor
+- Handles importing tasks from various sources: PDFs, images (OCR), or manual input.
+"""
+
+from pdf2image import convert_from_path
+import pytesseract
+
+def extract_text_from_pdf(pdf_path):
+    """
+    Extract text from each page of the PDF using OCR.
+    Returns the concatenated text of all pages.
+    """
+    pages = convert_from_path(pdf_path)  # Convert PDF pages to images
+    text = ""
+    for page in pages:
+        # Use Tesseract OCR to extract text from each image page
+        text += pytesseract.image_to_string(page)
+    return text
+
+def parse_tasks_from_text(text):
+    """
+    Parse raw text into a list of task descriptions.
+    This is a simple example: split lines into tasks.
+    """
+    tasks = []
+    for line in text.splitlines():
+        line = line.strip()
+        if line:
+            tasks.append(line)
+    return tasks
+
+def ingest_tasks(pdf_path=None, manual_text=None):
+    """
+    Ingest tasks either from a PDF file or from manually entered text.
+    Returns a list of task strings.
+    """
+    if pdf_path:
+        raw_text = extract_text_from_pdf(pdf_path)
+    elif manual_text:
+        raw_text = manual_text
+    else:
+        raise ValueError("No input provided for ingestion.")
+    tasks = parse_tasks_from_text(raw_text)
+    return tasks
+
+# Example usage (for testing)
+if __name__ == "__main__":
+    # Example: Ingest from a PDF file called 'assignments.pdf'
+    tasks = ingest_tasks(pdf_path="assignments.pdf")
+    print("Ingested tasks:", tasks)
+
+
+planner.py (LLM Planning Logic):
+
+# planner.py
+"""
+Module: Planner
+- Uses a Large Language Model (LLM) to generate a study schedule from tasks.
+"""
+
+import openai
+
+# Set your OpenAI API key (ensure this is secure; in practice use environment variable)
+openai.api_key = "YOUR_OPENAI_API_KEY"
+
+def generate_plan(tasks):
+    """
+    Generate a task schedule using an LLM (e.g., GPT-4).
+    Tasks is a list of strings, each with a description and due date.
+    Returns a formatted plan (string or structured data).
+    """
+    # Build prompt combining tasks
+    prompt = "You are an AI scheduling assistant. Plan the following tasks into a daily study schedule:\n"
+    for t in tasks:
+        prompt += f"- {t}\n"
+    prompt += "Provide the schedule as an ordered list with dates."
+
+    # Call the LLM (ChatCompletion with GPT-4)
+    response = openai.ChatCompletion.create(
+        model="gpt-4",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=500
+    )
+    plan_text = response.choices[0].message.content
+    return plan_text
+
+if __name__ == "__main__":
+    # Example tasks
+    example_tasks = [
+        "Finish math homework (due 2025-10-10)",
+        "Prepare history presentation (due 2025-10-20)"
+    ]
+    plan = generate_plan(example_tasks)
+    print("Generated Plan:\n", plan)
+
+
+executor.py (Reminders and Calendar Integration):
+
+# executor.py
+"""
+Module: Executor
+- Sets up reminders and calendar events for each task.
+"""
+
+from datetime import datetime, timedelta
+import schedule  # For scheduling reminders (runs in current process)
+# Example: import googleapiclient.discovery for Google Calendar (not shown here)
+
+def schedule_task_on_calendar(task, due_date):
+    """
+    (Placeholder) Add the task as an event on the user's calendar.
+    In practice, use Google Calendar API or similar.
+    """
+    print(f"[Calendar] Scheduling '{task}' on {due_date}")
+    # Example (pseudocode):
+    # event = {
+    #   'summary': task,
+    #   'start': {'dateTime': due_date.isoformat()},
+    #   'end': {'dateTime': (due_date + timedelta(hours=1)).isoformat()}
+    # }
+    # service.events().insert(calendarId='primary', body=event).execute()
+    # [25†L231-L238] (Google Calendar `events.insert` example)
+
+def set_reminder(task, due_date):
+    """
+    Schedule a reminder (e.g., 1 day before due date).
+    """
+    reminder_time = due_date - timedelta(days=1)
+    time_str = reminder_time.strftime("%Y-%m-%d %H:%M")
+    # Using schedule for demonstration (would run in background loop)
+    schedule.every().day.at(reminder_time.strftime("%H:%M")) \
+           .do(lambda: print(f"[Reminder] Task '{task}' is due tomorrow!"))
+
+def execute_plan(tasks_with_dates):
+    """
+    Execute the given plan: for each task, create calendar events and reminders.
+    tasks_with_dates is a list of dicts: {'task': str, 'due': datetime}.
+    """
+    for item in tasks_with_dates:
+        task = item['task']
+        due_date = item['due']
+        schedule_task_on_calendar(task, due_date)
+        set_reminder(task, due_date)
+
+    # Run all scheduled jobs (in real app this would loop continuously)
+    schedule.run_all()
+
+
+backend.py (API / Backend Setup with FastAPI):
+
+# backend.py
+"""
+FastAPI backend with endpoints for ingestion, planning, and execution.
+"""
+
+from fastapi import FastAPI, UploadFile, File, HTTPException
+from pydantic import BaseModel
+from typing import List
+from ingestor import ingest_tasks
+from planner import generate_plan
+from executor import execute_plan
+
+app = FastAPI()
+
+class TaskInput(BaseModel):
+    description: str
+    due_date: str  # ISO date string
+    priority: int = 1
+
+class PlanRequest(BaseModel):
+    tasks: List[TaskInput]
+
+@app.post("/ingest")
+async def ingest_endpoint(file: UploadFile = File(None), text: str = None):
+    """
+    Ingest tasks from uploaded PDF or text input.
+    Returns list of task descriptions.
+    """
+    if file:
+        # Save uploaded file temporarily
+        contents = await file.read()
+        with open("temp.pdf", "wb") as f:
+            f.write(contents)
+        tasks = ingest_tasks(pdf_path="temp.pdf")
+    elif text:
+        tasks = ingest_tasks(manual_text=text)
+    else:
+        raise HTTPException(status_code=400, detail="No input provided")
+    return {"tasks": tasks}
+
+@app.post("/plan")
+async def plan_endpoint(req: PlanRequest):
+    """
+    Generate a schedule plan for given tasks using the LLM.
+    """
+    tasks_list = [f"{t.description} (due {t.due_date})" for t in req.tasks]
+    plan_text = generate_plan(tasks_list)
+    return {"plan": plan_text}
+
+@app.post("/execute")
+async def execute_endpoint(req: PlanRequest):
+    """
+    Take a plan (tasks with dates) and set reminders/calendar events.
+    """
+    # Parse due_date strings to datetime objects
+    tasks_data = []
+    for t in req.tasks:
+        due = datetime.fromisoformat(t.due_date)
+        tasks_data.append({"task": t.description, "due": due})
+    execute_plan(tasks_data)
+    return {"status": "Scheduled tasks in calendar"}
+
+# To run: uvicorn backend:app --reload  (starts at http://localhost:8000)
+
+
+ui.py (Streamlit User Interface):
+
+# ui.py
+"""
+Streamlit-based UI for user interaction.
+Provides fields to enter tasks and displays the generated schedule.
+"""
+
+import streamlit as st
+import requests
+
+st.title("AI Assignment Planner")
+
+# Input section
+st.header("Enter Tasks")
+tasks_input = st.text_area("List your tasks (one per line), include due dates", height=200)
+if st.button("Generate Plan"):
+    tasks = tasks_input.strip().splitlines()
+    task_payload = [{"description": line, "due_date": "", "priority": 1} for line in tasks]
+    # Call backend /plan endpoint
+    try:
+        response = requests.post("http://localhost:8000/plan", json={"tasks": task_payload})
+        response.raise_for_status()
+        plan = response.json().get("plan", "")
+    except Exception as e:
+        st.error(f"Error generating plan: {e}")
+        plan = ""
+    st.subheader("Generated Schedule Plan")
+    st.write(plan)
