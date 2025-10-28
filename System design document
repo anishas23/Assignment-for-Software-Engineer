@@ -1,1 +1,130 @@
+System Design Document
+Architecture Overview
 
+The system is designed as a modular microservice-style application. An architecture diagram can be envisioned as follows:
+
+User Interface (Streamlit)
+         ↓
+  FastAPI Backend
+    ├── Ingestor Module (PDF/OCR)
+    ├── Planner Module (LLM)
+    └── Executor Module (Calendar/Reminders)
+
+
+Each component communicates via well-defined interfaces. The Streamlit UI sends user input to the FastAPI backend over HTTP. The backend calls internal modules to process tasks and return results. This separation of concerns allows independent development and scaling (microservices allow loose coupling and easier maintenance
+developer.nvidia.com
+).
+
+An architecture diagram is essentially a blueprint illustrating system components, their interactions, and data flow
+vfunction.com
+vfunction.com
+. In our design:
+
+User Interface: A web dashboard (built with Streamlit) for inputting tasks and viewing the schedule.
+
+API Layer (FastAPI): Receives requests, validates input (using Pydantic models), and routes them to the appropriate module.
+
+Ingestor: Extracts tasks from inputs (PDF via OCR or manual text).
+
+Planner: Uses an LLM (e.g. GPT-4) to create a task schedule.
+
+Executor: Sets up reminders and calendar events (e.g. via Google Calendar API) for the planned tasks.
+
+Data Design
+
+Tasks and plans are represented as structured data (JSON via HTTP). For example, a task object might be:
+
+{
+  "description": "Finish math homework",
+  "due_date": "2025-10-10",
+  "priority": 2
+}
+
+
+We use Pydantic models (TaskInput, PlanRequest) to enforce data schemas in API endpoints. The PlanRequest wraps a list of tasks. A generated Plan could be a formatted string or structured list of actions with assigned dates. This design ensures clear data contracts between UI and backend (using JSON) and simplifies input validation.
+
+Component Breakdown
+
+Ingestor: Handles input ingestion. Uses Python libraries for PDF parsing and OCR:
+
+PDF ingestion: Converts PDF pages to images (pdf2image) and then applies pytesseract OCR to extract text
+ploomber.io
+.
+
+Manual input: Accepts user-typed text.
+
+Parsing logic splits raw text into individual task descriptions.
+
+Planner: Uses an LLM-based agent for scheduling:
+
+Accepts list of tasks with deadlines and priority.
+
+Constructs a prompt and calls the OpenAI API to generate a schedule plan.
+
+GPT-4 (or similar) is used via OpenAI’s Python SDK (as in openai.ChatCompletion)
+latitude-blog.ghost.io
+. Modern LLM workflows often include planning and scheduling capabilities, which improve efficiency and resource allocation
+latitude-blog.ghost.io
+.
+
+Executor: Handles post-planning actions:
+
+Schedules calendar events for each task (e.g., using Google Calendar events.insert API)
+developers.google.com
+.
+
+Sets reminders (e.g., 1 day before task due date), using a scheduling library or external service.
+
+This module ensures the user is reminded and tasks are in their calendar.
+
+UI (User Interface): A Streamlit web app allows quick development of an interactive dashboard
+streamlit.io
+:
+
+Streamlit was chosen for rapid prototyping of data-centric apps
+streamlit.io
+.
+
+It abstracts away front-end details (HTML/JS) and lets us build forms and outputs with minimal Python code
+streamlit.io
+.
+
+The UI sends JSON to the backend and displays responses (plans) to the user.
+
+API/Backend (FastAPI):
+
+FastAPI is used to build the RESTful API endpoints
+developer.nvidia.com
+. It is high-performance (ASGI-based) and supports automatic docs (Swagger).
+
+Endpoints include /ingest (file or text upload), /plan, and /execute.
+
+FastAPI’s async capabilities and Pydantic models enable a scalable, maintainable service
+developer.nvidia.com
+.
+
+Technologies Used & Rationale
+
+Python: The primary language, due to its rich ecosystem for ML/AI (Pandas, NumPy, OpenAI SDK) and web frameworks. Streamlit and FastAPI are Python-based.
+
+FastAPI: Chosen for the backend API. FastAPI is a modern, async framework that is faster than Flask due to ASGI (as noted by NVIDIA)
+developer.nvidia.com
+. It supports quick development and validation.
+
+Streamlit: Used for the UI. Streamlit allows building a web interface in pure Python with very little code
+streamlit.io
+. It’s ideal for data-driven apps like this planner.
+
+OpenAI GPT-4: Employed in the Planner to leverage advanced LLM capabilities for interpreting tasks and generating schedules. LLM scheduling can adapt to changes and optimize task ordering.
+
+OCR Libraries: pdf2image + pytesseract are used in the Ingestor for PDF text extraction. Tesseract OCR is open-source and supports many languages
+ploomber.io
+, making it suitable for scanning assignment PDFs.
+
+Google Calendar API: (Or similar calendar integration) to create events programmatically. The events.insert method allows adding tasks as events
+developers.google.com
+.
+
+Schedulers: Python’s schedule or APScheduler could be used for reminders. These run in the background to notify the user (e.g., console print or email) before deadlines.
+
+Data Formats: JSON over HTTP is used for all inter-component communication for simplicity and compatibility.
