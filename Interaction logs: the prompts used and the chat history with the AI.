@@ -1,1 +1,104 @@
+3. Interaction Logs
+Planner Agent Prompts and LLM Outputs
 
+Prompt to Planner Agent (LLM):
+*“You are an AI tutor. Plan these tasks into a study schedule over the next two weeks:
+
+Math homework (due 2025-10-12)
+
+Science project (due 2025-10-15)
+
+Read history chapter (due 2025-10-20)*.”
+
+Agent Output (example from GPT-4):
+
+1. Oct 6 (Mon): Study 2 hours for Math Homework.
+2. Oct 8 (Wed): Complete Math Homework by afternoon.
+3. Oct 10 (Fri): Start Science Project; outline tasks.
+4. Oct 12 (Sun): Finalize Science Project; submit.
+5. Oct 13 (Mon): Read History Chapter introduction.
+6. Oct 15 (Wed): Finish detailed notes for History.
+7. Oct 18 (Sat): Review all tasks; catch up if needed.
+
+
+Re-Planning Scenario: User changes a deadline or adds a task.
+
+User update: “New task: Art essay due 2025-10-10 (earlier deadline).”
+
+Updated Prompt: “Reschedule the plan given this new task: Art essay (due 10/10). Keep other tasks and priorities.”
+
+LLM Response:
+
+Revised Plan:
+1. Oct 5: Start and finish Art essay (urgent, due Oct 10).
+2. Oct 6: Allocate 1 hour to Math homework.
+3. Oct 8: Complete Math homework.
+4. Oct 10: Finalize Science project outline.
+5. Oct 12: Finish Science project.
+6. Oct 13: Begin reading history chapter.
+7. Oct 15: Complete history chapter notes.
+
+Example User Interaction (UI)
+
+User Inputs Tasks: In the Streamlit app, the user types or pastes tasks into a text area:
+
+“Math Homework – due 2025-10-12; Science Project – due 2025-10-15; Read History Chapter – due 2025-10-20.”
+
+System Calls Planner: The UI sends this list to the backend /plan endpoint, which invokes the LLM.
+
+Displayed Output: The UI then shows the returned schedule in a subheader or table format:
+
+Generated Schedule Plan:
+- Oct 8: Finish Math Homework (2 hours)
+- Oct 10: Complete Science Project outline
+- Oct 12: Finalize Science Project; submit
+- Oct 15: Read and summarize History Chapter
+
+
+User Adds a Task: The user updates the input to include a new task, e.g., “Art essay – due 2025-10-10.”
+The planner is called again and a new plan is shown, illustrating how the system re-plans dynamically.
+
+These interaction logs demonstrate how the frontend input, LLM planning, and re-planning all work together in practice.
+
+4. Demo Instructions (Optional)
+
+Setup and Run Backend:
+
+Clone the repository and navigate to the project directory.
+
+Install dependencies: pip install -r requirements.txt (should include fastapi, uvicorn, streamlit, openai, pdf2image, pytesseract, etc.).
+
+Start the FastAPI server:
+
+uvicorn backend:app --reload
+
+
+This runs the API at http://localhost:8000. (See FastAPI docs example
+fastapi.tiangolo.com
+.)
+
+Run the UI:
+In a separate terminal, run the Streamlit app:
+
+streamlit run ui.py
+
+
+This opens a browser window. The UI allows you to enter tasks and see the generated schedule.
+
+Usage Steps:
+
+Enter each task on a new line, including due dates (as shown in examples).
+
+Click “Generate Plan”.
+
+The plan appears below in the Streamlit app.
+
+Sample Screenshots (described):
+
+Screenshot 1: The Streamlit dashboard at startup, showing a text area labeled “Enter Tasks” and a “Generate Plan” button.
+
+Screenshot 2: After clicking “Generate Plan”, a section titled “Generated Schedule Plan” appears with a list of scheduled tasks and dates.
+
+Screenshot 3: If a PDF is uploaded (feature for PDF ingestion), the interface would show an “Upload Assignment PDF” button and then display the extracted tasks.
+
+These instructions should allow someone to run the prototype end-to-end. The key steps are starting the backend API server and then launching the Streamlit UI, which interacts with the API to perform ingestion, planning, and scheduling.
